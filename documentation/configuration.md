@@ -116,19 +116,71 @@ CLOAKD_CACHE_ENABLED=true
 CLOAKD_FAILOVER_ENABLED=false
 ```
 
-### Profile D: Multi-Tenant Air-Gapped Enterprise Gateway (v1.1.0)
+### Profile D: Multi-Tenant Air-Gapped Enterprise Gateway (v1.2.0)
 Strict tenant authentication, per-organization BYOK keys and DLP rules, rejecting anonymous requests:
 ```env
 CLOAKD_HOST=0.0.0.0
 CLOAKD_PORT=8080
 CLOAKD_LOG_LEVEL=info
 
-# Multi-tenant config file
-CLOAKD_TENANTS_FILE=config/tenants.yaml
+# Multi-tenant config file or directory
+CLOAKD_TENANTS_FILE=config/tenants/
 CLOAKD_ALLOW_ANONYMOUS=false
 
 # Cache and Prometheus metrics
 CLOAKD_CACHE_ENABLED=true
 CLOAKD_FAILOVER_ENABLED=true
 ```
+
+---
+
+## 3. Declarative Manifests Specification (v1.2.0)
+
+Cloakd Core supports Kubernetes-style declarative manifests with cascading configuration inheritance:
+
+$$\mathbf{User} \longrightarrow \mathbf{Role} \longrightarrow \mathbf{Tenant} \longrightarrow \mathbf{Global\ (.env)}$$
+
+### A. `kind: Tenant`
+Defines the enterprise organization, default models, baseline DLP rules, and BYOK credentials:
+```yaml
+kind: Tenant
+id: "bank-corp"
+name: "Bank Corp Global"
+default_model: "gemini-3.5-flash-lite"
+allowed_models: ["*"]
+fallback_models: ["gpt-4o-mini", "claude-3-5-haiku"]
+enabled_rules: ["banking", "fr", "secrets"]
+provider_keys:
+  openai: "sk-proj-..."
+  gemini: "AIzaSy..."
+rate_limit_rpm: 2000
+cache_enabled: true
+```
+
+### B. `kind: Role`
+Scoped to a specific `tenant_id`. Defines business profile permissions and model governance:
+```yaml
+kind: Role
+id: "developer"
+tenant_id: "bank-corp"
+name: "Software Engineer"
+default_model: "gemini-3.5-flash-lite"
+allowed_models: ["gemini-3.5-flash-lite", "gpt-4o-mini"]
+fallback_models: ["gpt-4o-mini"]
+rate_limit_rpm: 60
+cache_enabled: true
+```
+
+### C. `kind: User`
+Represents an individual caller or microservice with an API authentication key:
+```yaml
+kind: User
+id: "usr_alice"
+tenant_id: "bank-corp"
+role: "developer"
+name: "Alice Martin"
+key: "sk-cloakd-bank-alice-7788"
+# Optional overrides (e.g. rate_limit_rpm: 120)
+```
+
 

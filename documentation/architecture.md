@@ -196,3 +196,27 @@ Cloakd avoids bulky metric runtime dependencies by employing atomic, thread-safe
 * Formatted strictly conforming to Prometheus Text Format 0.0.4.
 * Exposes total requests, cache hits/misses, DLP masked entity counts by type, and provider failover cascade frequencies.
 
+---
+
+## 9. Declarative Manifests & Model Governance (v1.2.0)
+
+### A. Tri-Manifest Architecture (`kind: Tenant`, `kind: Role`, `kind: User`)
+Inspired by Kubernetes custom resources and GitOps workflows, configurations can be split across any number of documents and files:
+* **`Tenant`** : Defines the root organization, BYOK provider keys, baseline DLP rules, and default fallback models.
+* **`Role`** : Scoped strictly to a `tenant_id` to guarantee zero cross-tenant leakage. Restricts model access (`allowed_models`) and specifies role-level default models.
+* **`User`** : Maps a secret client key (`key: "sk-cloakd-..."`) to a `tenant_id` and `role`, with optional user-specific quota overrides.
+
+### B. Cascading Configuration Inheritance
+When compiling user context, Cloakd evaluates settings in order of specificity:
+
+$$\mathbf{User} \longrightarrow \mathbf{Role} \longrightarrow \mathbf{Tenant} \longrightarrow \mathbf{Global\ (.env)}$$
+
+* **`default_model`** : User $\rightarrow$ Role $\rightarrow$ Tenant $\rightarrow$ Server `.env`.
+* **`allowed_models`** : User $\rightarrow$ Role $\rightarrow$ Tenant $\rightarrow$ All (`*`). Checked at request ingress; unauthorized models return `HTTP 403 Forbidden`.
+* **`fallback_models`** : Explicit model-based failover list (e.g. `["gpt-4o-mini", "claude-3-5-haiku"]`), eliminating provider guessing.
+* **`enabled_rules`** : Additive security union: $\text{Tenant} \cup \text{Role} \cup \text{User}$.
+
+### C. Recursive Directory & Multi-Document Scanning (`src/tenant/static_file.rs`)
+When `CLOAKD_TENANTS_FILE` points to a directory (`conf.d/`), Cloakd traverses all `.yaml`, `.yml`, and `.json` files recursively, resolves references, and pre-compiles effective user contexts into the memory LRU cache.
+
+

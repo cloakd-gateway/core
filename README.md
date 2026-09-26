@@ -1,6 +1,6 @@
 # Cloakd 🛡️
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](Cargo.toml)
 [![License](https://img.shields.io/badge/license-Apache%202.0%20%2F%20MIT-green.svg)](LICENSE)
 [![Memory Footprint](https://img.shields.io/badge/memory-%3C10%20MB%20RAM-brightgreen.svg)]()
 [![Binary Size](https://img.shields.io/badge/binary-5.2%20MB-purple.svg)]()
@@ -200,32 +200,52 @@ CLOAKD_ENABLED_RULES=email,card,iban,secrets,us_ssn
 
 ---
 
-## 🏢 Multi-Tenant Data Plane & BYOK (v1.1.0)
+## 🏢 Declarative Multi-Tenancy & Model Governance (v1.2.0)
 
-Cloakd Core supports multi-tenant enterprise isolation directly in the data plane with sub-50 µs routing overhead:
+Cloakd Core features an enterprise-grade declarative manifest system inspired by Kubernetes (`kind: Tenant`, `kind: Role`, `kind: User`) with **cascading configuration inheritance**:
 
-* 🔑 **Authentication & Context** : Clients authenticate with `Authorization: Bearer sk-cloakd-<tenant-key>` or `x-cloakd-tenant-key`.
-* 🛡️ **Per-Tenant DLP Rule Packs** : Tenant A can enforce strict `banking,eu` rules, while Tenant B uses `us,secrets`.
-* 💼 **BYOK (Bring-Your-Own-Key)** : Seamlessly inject each customer's private upstream API credentials (OpenAI, Anthropic, Gemini) with zero credential leakage to third parties.
-* ⚡ **Sub-50 µs In-Memory LRU Cache** : High-concurrency cached tenant configuration powered by `moka`.
-* 📁 **Air-Gapped Static Configuration** : Define tenants via local YAML/JSON file without requiring an external control plane (`CLOAKD_TENANTS_FILE=config/tenants.yaml`).
+$$\mathbf{User} \longrightarrow \mathbf{Role} \longrightarrow \mathbf{Tenant} \longrightarrow \mathbf{Global\ (.env)}$$
+
+* 📁 **Multi-Document & Directory Scanning** : Accepts single multi-document YAML (`---`) or recursively scans entire directories (`CLOAKD_TENANTS_FILE=config/tenants/`).
+* 🎯 **Model Governance (`default_model` & `allowed_models`)** : Restrict expensive frontier models (e.g. `o1`, `gpt-4o`) to specific roles or users using wildcards (`gemini-*`, `gpt-4o-mini`). Unauthorized requests return `HTTP 403 Forbidden`.
+* 🔄 **Precise Failover with `fallback_models`** : Cascades through explicit alternative models on HTTP 429/5xx (e.g. `gemini-3.5-flash-lite` $\rightarrow$ `gpt-4o-mini`) rather than guessing providers.
+* 💼 **Per-Tenant BYOK** : Ingress tenant keys (`sk-cloakd-...`) are stripped while injecting each organization's private LLM keys.
+* 🛡️ **Defense-in-Depth DLP** : Effective rules are the additive union: `Tenant.rules ∪ Role.rules ∪ User.rules`.
+* 🏷️ **End-to-End Audit Trail** : Every response includes:
+  ```http
+  x-cloakd-tenant-id: bank-corp
+  x-cloakd-user-id: usr_alice
+  x-cloakd-role: developer
+  ```
 
 ```yaml
-# config/tenants.yaml
-tenants:
-  - id: "tenant-bank-corp"
-    organization_name: "Bank Corp Global"
-    api_key: "sk-cloakd-bank-prod-9876543210"
-    enabled_rules: ["banking", "fr", "secrets"]
-    provider_keys:
-      openai: "sk-proj-bankcorp-private-key"
-    fallback_providers: ["gemini", "openai"]
-    cache_enabled: true
-```
-
-Every response includes the audit header:
-```http
-x-cloakd-tenant-id: tenant-bank-corp
+# Example: Declarative Manifests (config/tenants.yaml)
+kind: Tenant
+id: "bank-corp"
+name: "Bank Corp Global"
+default_model: "gemini-3.5-flash-lite"
+allowed_models: ["*"]
+fallback_models: ["gpt-4o-mini", "claude-3-5-haiku"]
+enabled_rules: ["banking", "fr", "secrets"]
+provider_keys:
+  openai: "sk-proj-bankcorp-private-key"
+  gemini: "AIzaSyBankCorpKey"
+rate_limit_rpm: 2000
+---
+kind: Role
+id: "developer"
+tenant_id: "bank-corp"
+name: "Software Engineer"
+allowed_models: ["gemini-3.5-flash-lite", "gpt-4o-mini"]
+fallback_models: ["gpt-4o-mini"]
+rate_limit_rpm: 60
+---
+kind: User
+id: "usr_alice"
+tenant_id: "bank-corp"
+role: "developer"
+name: "Alice Martin"
+key: "sk-cloakd-bank-alice-7788"
 ```
 
 ---
@@ -236,7 +256,7 @@ Cloakd Core exposes zero-dependency, atomic thread-safe Prometheus metrics at `G
 
 | Metric Name | Type | Description & Labels |
 | :--- | :--- | :--- |
-| `cloakd_http_requests_total` | Counter | Total HTTP requests handled (`tenant`, `status`, `cache="HIT\|MISS\|BYPASS"`) |
+| `cloakd_http_requests_total` | Counter | Total HTTP requests handled (`tenant`, `role`, `status`, `cache="HIT\|MISS\|BYPASS"`) |
 | `cloakd_dlp_masked_entities_total` | Counter | Sensitive PII entities detected and pseudonymized (`tenant`, `entity`) |
 | `cloakd_cache_hits_total` | Counter | FinOps cache hits saving upstream LLM token costs (`tenant`) |
 | `cloakd_cache_misses_total` | Counter | Cache misses forwarded to upstream LLMs (`tenant`) |
@@ -258,16 +278,21 @@ Cloakd Core exposes zero-dependency, atomic thread-safe Prometheus metrics at `G
   - [x] Multi-provider fallback cascade on HTTP 429/5xx errors.
   - [x] Real-time audit headers (`x-cloakd-cache`, `x-cloakd-fallback`, `x-cloakd-masked-count`).
 
-* **v1.1.0 — High-Performance Multi-Tenant Data Plane (Current Version) :**
-  - [x] `TenantContext` resolution via API keys (`Bearer sk-cloakd-tenant...` or `x-cloakd-tenant-key`).
-  - [x] Per-tenant DLP rule profiles & custom fallback routing.
-  - [x] Bring-Your-Own-Key (BYOK) upstream credential injection per tenant.
-  - [x] Sub-50 µs in-memory LRU `TenantCache` (powered by `moka`).
-  - [x] Air-gapped / Local YAML/JSON configuration loader (`CLOAKD_TENANTS_FILE`).
+* **v1.1.0 — High-Performance Multi-Tenant Data Plane :**
+  - [x] Multi-tenant isolation and per-tenant BYOK credentials.
+  - [x] In-memory sub-50 µs LRU `TenantCache` (powered by `moka`).
   - [x] Native Prometheus metrics exporter (`GET /metrics`).
-  - [x] Multi-tenant audit trail with `x-cloakd-tenant-id` response header.
+  - [x] Multi-tenant audit trail with `x-cloakd-tenant-id`.
 
-* **v1.2.0 — Dynamic Control Plane Synchronization & Distributed Caching (Upcoming) :**
+* **v1.2.0 — Declarative Manifests & Model Governance (Current Version) :**
+  - [x] Kubernetes-style declarative manifests (`kind: Tenant`, `kind: Role`, `kind: User`).
+  - [x] Cascading configuration inheritance (`User > Role > Tenant > Global`).
+  - [x] Fine-grained Model Governance with wildcard allowlists (`allowed_models`) and `default_model`.
+  - [x] Model-based failover cascades (`fallback_models`) replacing provider guessing.
+  - [x] Recursive directory scanning (`conf.d/`) and multi-document YAML parsing.
+  - [x] Enriched caller audit telemetry (`x-cloakd-user-id`, `x-cloakd-role`) and Prometheus `role` metric label.
+
+* **v1.3.0 — Dynamic Control Plane Synchronization & Distributed Caching (Upcoming) :**
   - [ ] Webhook-driven tenant cache invalidation and hot-reloading.
   - [ ] Real-time Control Plane streaming sync (gRPC / WebSocket).
   - [ ] Redis / Dragonfly optional distributed cache backend for clustered horizontal scaling.

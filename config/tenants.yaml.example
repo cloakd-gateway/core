@@ -1,59 +1,98 @@
-# Cloakd Core - Multi-Tenant Configuration Example
-# Set CLOAKD_TENANTS_FILE=config/tenants.yaml to enable static multi-tenant resolution.
+# Cloakd Core - Declarative Manifests Configuration Example (v1.2.0)
+# Supports multi-documents (separated by ---) or directory scanning (CLOAKD_TENANTS_FILE=config/tenants/)
+# Hierarchy of configuration: User > Role > Tenant > Global (.env)
 
-tenants:
-  # Tenant 1: Enterprise Banking Customer
-  - id: "tenant-bank-corp"
-    organization_name: "Bank Corp Global"
-    api_key: "sk-cloakd-bank-prod-9876543210"
-    # Specific DLP packs & rules enabled for this tenant
-    enabled_rules:
-      - "banking"     # Includes card, iban
-      - "fr"          # Includes fr_nir
-      - "secrets"     # Cloud & API credentials
-      - "email"
-    # Bring-Your-Own-Key (BYOK) for LLM providers
-    provider_keys:
-      openai: "sk-proj-bankcorp-private-openai-key"
-      gemini: "AIzaSyBankCorpDedicatedGeminiKey"
-    # Custom failover routing for this tenant
-    fallback_providers:
-      - "gemini"
-      - "openai"
-    # Enable FinOps prompt caching
-    cache_enabled: true
-    # Maximum requests per minute
-    rate_limit_rpm: 1200
+# ==============================================================================
+# 1. Organization Manifest (Tenant)
+# ==============================================================================
+kind: Tenant
+id: "bank-corp"
+name: "Bank Corp Global"
+# Company-wide baseline model
+default_model: "gemini-3.5-flash-lite"
+# Allowed models across the entire organization (wildcards supported)
+allowed_models:
+  - "*"
+# Default failover model sequence on HTTP 429 or 5xx errors
+fallback_models:
+  - "gpt-4o-mini"
+  - "claude-3-5-haiku"
+# Enterprise-wide baseline DLP rules (union of Tenant ∪ Role ∪ User)
+enabled_rules:
+  - "banking"     # ISO 7064 Modulo 97-10 IBAN + Luhn Cards
+  - "fr"          # French NIR Modulo 97
+  - "secrets"     # Cloud & Infrastructure API credentials
+  - "email"
+# Bring-Your-Own-Key (BYOK) for LLM providers
+provider_keys:
+  openai: "sk-proj-bankcorp-private-openai-key-placeholder"
+  gemini: "AIzaSyBankCorpDedicatedGeminiKeyPlaceholder"
+  anthropic: "sk-ant-bankcorp-private-key-placeholder"
+rate_limit_rpm: 2000
+cache_enabled: true
 
-  # Tenant 2: FinTech Startup (US / Healthcare)
-  - id: "tenant-health-tech"
-    organization_name: "HealthTech AI"
-    api_key: "sk-cloakd-health-stage-123456789"
-    enabled_rules:
-      - "us"          # Includes us_ssn
-      - "pii"         # Includes email, phone
-      - "secrets"
-    provider_keys:
-      anthropic: "sk-ant-api03-healthtech-key"
-      openai: "sk-proj-healthtech-openai-key"
-    fallback_providers:
-      - "anthropic"
-      - "openai"
-    cache_enabled: true
-    rate_limit_rpm: 600
+---
+# ==============================================================================
+# 2. Role Manifests (Scoped to tenant_id)
+# ==============================================================================
+kind: Role
+id: "developer"
+tenant_id: "bank-corp"
+name: "Software Engineer"
+# Default model for standard development tasks
+default_model: "gemini-3.5-flash-lite"
+# FinOps restriction: developers can only invoke economical models
+allowed_models:
+  - "gemini-3.5-flash-lite"
+  - "gpt-4o-mini"
+# Economic fallback target
+fallback_models:
+  - "gpt-4o-mini"
+rate_limit_rpm: 60
+cache_enabled: true
 
-  # Tenant 3: European Retailer with custom providers
-  - id: "tenant-euro-retail"
-    organization_name: "EuroRetail SAS"
-    api_key: "sk-cloakd-euro-live-5555444433"
-    enabled_rules:
-      - "eu"          # Includes iban, fr_nir, es_dni
-      - "email"
-      - "phone"
-    provider_keys:
-      custom: "bearer-token-local-vllm"
-    fallback_providers:
-      - "custom"
-      - "gemini"
-    cache_enabled: false
-    rate_limit_rpm: 300
+---
+kind: Role
+id: "data-scientist"
+tenant_id: "bank-corp"
+name: "Data & AI Specialist"
+# Access to frontier reasoning models
+default_model: "gpt-4o"
+allowed_models:
+  - "*"
+fallback_models:
+  - "claude-3-5-sonnet"
+  - "gemini-2.5-pro"
+rate_limit_rpm: 300
+cache_enabled: true
+
+---
+# ==============================================================================
+# 3. User & Service Manifests (Specific API keys)
+# ==============================================================================
+kind: User
+id: "usr_alice"
+tenant_id: "bank-corp"
+role: "developer"
+name: "Alice Martin"
+key: "sk-cloakd-bank-alice-7788"
+# Inherits developer role: 60 rpm, gemini-flash/gpt-4o-mini, fallback gpt-4o-mini
+
+---
+kind: User
+id: "usr_lead_ai"
+tenant_id: "bank-corp"
+role: "data-scientist"
+name: "Marc Laurent"
+key: "sk-cloakd-bank-marc-9900"
+# Inherits data-scientist role: 300 rpm, gpt-4o default, all models allowed
+
+---
+kind: User
+id: "srv_crm_prod"
+tenant_id: "bank-corp"
+role: "developer"
+name: "Production CRM Connector"
+key: "sk-cloakd-bank-crm-1122"
+# Specific override: High throughput quota for the production backend microservice
+rate_limit_rpm: 1500
