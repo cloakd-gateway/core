@@ -4,6 +4,7 @@ use crate::config::AppConfig;
 use crate::dlp::DlpPipeline;
 use crate::provider::ProviderRegistry;
 use crate::upstream::UpstreamClient;
+use crate::tenant::TenantResolver;
 use axum::routing::{get, post};
 use axum::Router;
 use std::sync::Arc;
@@ -17,6 +18,7 @@ pub struct AppState {
     pub dlp_engine: Arc<dyn DlpPipeline>,
     pub provider_registry: Arc<ProviderRegistry>,
     pub prompt_cache: Arc<PromptCache>,
+    pub tenant_resolver: Arc<TenantResolver>,
 }
 
 pub fn create_router(state: AppState) -> Router {

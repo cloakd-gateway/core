@@ -14,6 +14,7 @@ use crate::cache::PromptCache;
 use crate::config::AppConfig;
 use crate::dlp::DlpEngine;
 use crate::provider::ProviderRegistry;
+use crate::tenant::TenantResolver;
 use crate::upstream::UpstreamClient;
 use std::sync::Arc;
 use tokio::signal;
@@ -48,12 +49,20 @@ async fn main() -> anyhow::Result<()> {
     let provider_registry = Arc::new(ProviderRegistry::from_config(&config));
     let prompt_cache = Arc::new(PromptCache::from_config(&config));
 
+    let tenant_resolver = if let Some(ref tenants_file) = config.tenants_file {
+        info!(path = %tenants_file, "Loading tenant configurations from file");
+        Arc::new(TenantResolver::from_file(&config, tenants_file, config.allow_anonymous)?)
+    } else {
+        Arc::new(TenantResolver::from_app_config(&config))
+    };
+
     let state = AppState {
         config: config_arc,
         upstream_client,
         dlp_engine,
         provider_registry,
         prompt_cache,
+        tenant_resolver,
     };
 
     let app = create_router(state);

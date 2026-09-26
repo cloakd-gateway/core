@@ -65,6 +65,34 @@ pub async fn chat_completions(
     headers: HeaderMap,
     Json(mut payload): Json<Value>,
 ) -> Result<Response, CloakdError> {
+    // 0. Resolve TenantContext from authorization header or tenant key
+    let api_key = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|auth| {
+            if let Some(token) = auth.strip_prefix("Bearer ") {
+                let trimmed = token.trim();
+                if trimmed.is_empty() || trimmed == "not-needed" {
+                    None
+                } else {
+                    Some(trimmed)
+                }
+            } else {
+                None
+            }
+        })
+        .or_else(|| {
+            headers
+                .get("x-cloakd-tenant-key")
+                .or_else(|| headers.get("x-cloakd-api-key"))
+                .and_then(|h| h.to_str().ok())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+        });
+
+    let tenant_ctx = state.tenant_resolver.resolve(api_key).await?;
+    let tenant = &tenant_ctx.config;
+
     // 1. Resolve Provider and Model
     let requested_model = payload.get("model").and_then(Value::as_str);
     let resolved_target = state.provider_registry.resolve(requested_model)?;
@@ -79,18 +107,19 @@ pub async fn chat_completions(
         .and_then(Value::as_bool)
         .unwrap_or(false);
 
-    // 2. Ingress DLP: Mask sensitive entities
-    let masked_count = state.dlp_engine.mask_chat_payload(&mut payload, &mut vault);
+    // 2. Ingress DLP: Mask sensitive entities using tenant rule profile
+    let masked_count = state.dlp_engine.mask_chat_payload_for_tenant(&mut payload, &mut vault, tenant);
     debug!(
         is_streaming,
+        tenant_id = %tenant.id,
         provider = %resolved_target.provider_id,
         model = %resolved_target.model,
         masked_entities = masked_count,
         "Ingress DLP processing completed"
     );
 
-    // 3. FinOps Cache Lookup (Non-streaming mode)
-    let cache_key = if state.prompt_cache.is_enabled() {
+    // 3. FinOps Cache Lookup (Non-streaming mode, if cache enabled for tenant)
+    let cache_key = if state.prompt_cache.is_enabled() && tenant.cache_enabled {
         Some(compute_cache_key(&payload))
     } else {
         None
@@ -106,6 +135,7 @@ pub async fn chat_completions(
                 return Response::builder()
                     .status(StatusCode::OK)
                     .header(header::CONTENT_TYPE, "application/json")
+                    .header("x-cloakd-tenant-id", tenant.id.to_string())
                     .header("x-cloakd-cache", "HIT")
                     .header("x-cloakd-fallback", "false")
                     .header("x-cloakd-masked-count", masked_count.to_string())
@@ -118,14 +148,19 @@ pub async fn chat_completions(
     }
 
     // 4. Upstream call with Failover
+    let fallback_order = tenant
+        .fallback_providers
+        .as_ref()
+        .unwrap_or(&state.config.fallback_providers);
+
     let fallback_targets = state.provider_registry.resolve_fallbacks(
         &resolved_target.provider_id,
-        &state.config.fallback_providers,
+        fallback_order,
     );
 
     let forward_result = state
         .upstream_client
-        .forward_with_failover(&resolved_target, &fallback_targets, &headers, &mut payload)
+        .forward_with_failover(&resolved_target, &fallback_targets, &headers, &mut payload, Some(tenant))
         .await?;
 
     let effective_target = forward_result.effective_target;
@@ -146,6 +181,7 @@ pub async fn chat_completions(
             .header(header::CONTENT_TYPE, "text/event-stream")
             .header(header::CACHE_CONTROL, "no-cache")
             .header(header::CONNECTION, "keep-alive")
+            .header("x-cloakd-tenant-id", tenant.id.to_string())
             .header("x-cloakd-cache", "BYPASS")
             .header("x-cloakd-fallback", fallback_occurred.to_string())
             .header("x-cloakd-masked-count", masked_count.to_string())
@@ -183,6 +219,7 @@ pub async fn chat_completions(
         let mut builder = Response::builder()
             .status(StatusCode::OK)
             .header(header::CONTENT_TYPE, "application/json")
+            .header("x-cloakd-tenant-id", tenant.id.to_string())
             .header("x-cloakd-cache", "MISS")
             .header("x-cloakd-fallback", fallback_occurred.to_string())
             .header("x-cloakd-masked-count", masked_count.to_string())
