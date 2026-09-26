@@ -398,7 +398,7 @@ mod tests {
         let user = UserManifest {
             id: "usr_alice".to_string(),
             tenant_id: "bank-corp".to_string(),
-            role: "developer".to_string(),
+            role_id: "developer".to_string(),
             key: "sk-cloakd-alice".to_string(),
             name: Some("Alice".to_string()),
             default_model: None, // inherits role default_model: gpt-4o-mini

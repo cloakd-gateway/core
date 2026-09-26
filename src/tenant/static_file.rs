@@ -141,7 +141,7 @@ pub fn load_tenants_from_path<P: AsRef<Path>>(
                 users.push(UserManifest {
                     id: format!("{}-user", tenant_id),
                     tenant_id: tenant_id.clone(),
-                    role: default_role_id,
+                    role_id: default_role_id,
                     key: entry.api_key,
                     name: None,
                     default_model: None,
@@ -230,10 +230,10 @@ pub fn load_tenants_from_path<P: AsRef<Path>>(
                 user.id, user.tenant_id
             )));
         }
-        if !roles.contains_key(&(user.tenant_id.clone(), user.role.clone())) {
+        if !roles.contains_key(&(user.tenant_id.clone(), user.role_id.clone())) {
             return Err(CloakdError::Config(format!(
                 "User '{}' references unknown role '{}' in tenant '{}'",
-                user.id, user.role, user.tenant_id
+                user.id, user.role_id, user.tenant_id
             )));
         }
     }
@@ -244,7 +244,7 @@ pub fn load_tenants_from_path<P: AsRef<Path>>(
         let tenant = tenants.get(&user.tenant_id).ok_or_else(|| {
             CloakdError::Config(format!("Tenant '{}' not found", user.tenant_id))
         })?;
-        let role = roles.get(&(user.tenant_id.clone(), user.role.clone()));
+        let role = roles.get(&(user.tenant_id.clone(), user.role_id.clone()));
         let merged = TenantConfig::merge_hierarchy(tenant, role, Some(&user), app_config);
         result_map.insert(user.key, merged);
     }
@@ -355,7 +355,7 @@ rate_limit_rpm: 60
 kind: User
 id: usr_alice
 tenant_id: bank-corp
-role: developer
+role_id: developer
 name: Alice Martin
 key: sk-cloakd-alice-7788
 "#;

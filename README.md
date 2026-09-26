@@ -243,7 +243,7 @@ rate_limit_rpm: 60
 kind: User
 id: "usr_alice"
 tenant_id: "bank-corp"
-role: "developer"
+role_id: "developer"
 name: "Alice Martin"
 key: "sk-cloakd-bank-alice-7788"
 ```

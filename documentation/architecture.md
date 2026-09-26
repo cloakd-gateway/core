@@ -204,7 +204,7 @@ Cloakd avoids bulky metric runtime dependencies by employing atomic, thread-safe
 Inspired by Kubernetes custom resources and GitOps workflows, configurations can be split across any number of documents and files:
 * **`Tenant`** : Defines the root organization, BYOK provider keys, baseline DLP rules, and default fallback models.
 * **`Role`** : Scoped strictly to a `tenant_id` to guarantee zero cross-tenant leakage. Restricts model access (`allowed_models`) and specifies role-level default models.
-* **`User`** : Maps a secret client key (`key: "sk-cloakd-..."`) to a `tenant_id` and `role`, with optional user-specific quota overrides.
+* **`User`** : Maps a secret client key (`key: "sk-cloakd-..."`) to a `tenant_id` and `role_id`, with optional user-specific quota overrides.
 
 ### B. Cascading Configuration Inheritance
 When compiling user context, Cloakd evaluates settings in order of specificity:

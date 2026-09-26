@@ -44,7 +44,7 @@ pub struct RoleManifest {
 pub struct UserManifest {
     pub id: String,
     pub tenant_id: String,
-    pub role: String,
+    pub role_id: String,
     pub key: String,
     pub name: Option<String>,
     pub default_model: Option<String>,
@@ -81,7 +81,7 @@ rate_limit_rpm: 60
 kind: User
 id: usr_alice
 tenant_id: tenant-bank
-role: developer
+role_id: developer
 name: Alice Martin
 key: sk-cloakd-alice-999
 "#;
@@ -113,7 +113,7 @@ key: sk-cloakd-alice-999
             Manifest::User(u) => {
                 assert_eq!(u.id, "usr_alice");
                 assert_eq!(u.tenant_id, "tenant-bank");
-                assert_eq!(u.role, "developer");
+                assert_eq!(u.role_id, "developer");
                 assert_eq!(u.key, "sk-cloakd-alice-999");
             }
             _ => panic!("Expected User manifest"),

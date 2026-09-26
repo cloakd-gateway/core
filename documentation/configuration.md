@@ -177,7 +177,7 @@ Represents an individual caller or microservice with an API authentication key:
 kind: User
 id: "usr_alice"
 tenant_id: "bank-corp"
-role: "developer"
+role_id: "developer"
 name: "Alice Martin"
 key: "sk-cloakd-bank-alice-7788"
 # Optional overrides (e.g. rate_limit_rpm: 120)

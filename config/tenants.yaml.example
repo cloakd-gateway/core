@@ -73,7 +73,7 @@ cache_enabled: true
 kind: User
 id: "usr_alice"
 tenant_id: "bank-corp"
-role: "developer"
+role_id: "developer"
 name: "Alice Martin"
 key: "sk-cloakd-bank-alice-7788"
 # Inherits developer role: 60 rpm, gemini-flash/gpt-4o-mini, fallback gpt-4o-mini
@@ -82,7 +82,7 @@ key: "sk-cloakd-bank-alice-7788"
 kind: User
 id: "usr_lead_ai"
 tenant_id: "bank-corp"
-role: "data-scientist"
+role_id: "data-scientist"
 name: "Marc Laurent"
 key: "sk-cloakd-bank-marc-9900"
 # Inherits data-scientist role: 300 rpm, gpt-4o default, all models allowed
@@ -91,7 +91,7 @@ key: "sk-cloakd-bank-marc-9900"
 kind: User
 id: "srv_crm_prod"
 tenant_id: "bank-corp"
-role: "developer"
+role_id: "developer"
 name: "Production CRM Connector"
 key: "sk-cloakd-bank-crm-1122"
 # Specific override: High throughput quota for the production backend microservice
