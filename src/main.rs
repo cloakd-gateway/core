@@ -5,6 +5,7 @@ mod dlp;
 mod error;
 mod provider;
 mod stream;
+mod tenant;
 mod upstream;
 mod vault;
 
