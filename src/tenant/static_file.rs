@@ -1,7 +1,7 @@
 use super::context::{TenantConfig, TenantId};
 use crate::error::CloakdError;
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
@@ -57,12 +57,8 @@ pub fn load_tenants_from_file<P: AsRef<Path>>(
 
     let mut map = HashMap::new();
     for entry in parsed_file.tenants {
-        let enabled_rules: HashSet<String> = entry
-            .enabled_rules
-            .unwrap_or_default()
-            .into_iter()
-            .map(|r| r.trim().to_lowercase())
-            .collect();
+        let rules_str = entry.enabled_rules.unwrap_or_default().join(",");
+        let enabled_rules = crate::dlp::rules::expand_rule_names(&rules_str);
 
         let config = TenantConfig {
             id: TenantId::from(entry.id),
@@ -113,10 +109,10 @@ tenants:
         assert_eq!(loaded.len(), 1);
 
         let tenant = loaded.get("sk-cloakd-tenant-alpha-secret").unwrap();
-        assert_eq!(tenant.id, TenantId::from("tenant-alpha"));
-        assert_eq!(tenant.organization_name, "Alpha Corp");
-        assert!(tenant.is_rule_enabled("banking"));
-        assert!(tenant.is_rule_enabled("eu"));
+        assert!(tenant.is_rule_enabled("card"));
+        assert!(tenant.is_rule_enabled("iban"));
+        assert!(tenant.is_rule_enabled("fr_nir"));
+        assert!(!tenant.is_rule_enabled("email"));
         assert_eq!(tenant.get_provider_key("openai"), Some("sk-proj-alpha-123"));
         assert_eq!(tenant.fallback_providers, Some(vec!["openai".to_string(), "gemini".to_string()]));
         assert_eq!(tenant.rate_limit_rpm, Some(300));

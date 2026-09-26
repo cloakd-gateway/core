@@ -61,12 +61,7 @@ impl TenantConfig {
             provider_keys.insert("custom".to_string(), k.clone());
         }
 
-        let enabled_rules: HashSet<String> = config
-            .enabled_rules
-            .split(',')
-            .map(|s| s.trim().to_lowercase())
-            .filter(|s| !s.is_empty())
-            .collect();
+        let enabled_rules = crate::dlp::rules::expand_rule_names(&config.enabled_rules);
 
         Self {
             id: TenantId::from("default"),

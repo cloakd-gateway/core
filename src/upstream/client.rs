@@ -1,6 +1,7 @@
 use crate::config::AppConfig;
 use crate::error::CloakdError;
 use crate::provider::ResolvedTarget;
+use crate::tenant::TenantConfig;
 use crate::upstream::failover::{is_failover_status, ForwardResult};
 use axum::http::HeaderMap;
 use reqwest::{header, Client, Response, StatusCode};
@@ -32,21 +33,30 @@ impl UpstreamClient {
         target: &ResolvedTarget,
         headers: &HeaderMap,
         body: &Value,
+        tenant: Option<&TenantConfig>,
     ) -> Result<Response, CloakdError> {
         let mut request_builder = self.client.post(&target.target_url).json(body);
 
         // Resolve Authorization: Bearer token
         // Priority:
-        // 1. Secret API key configured in Cloakd for this provider
-        // 2. Client incoming Authorization header
-        let auth_header = target
-            .api_key
-            .as_ref()
+        // 1. Tenant BYOK key (if configured for this provider in TenantConfig)
+        // 2. Secret API key configured in Cloakd for this provider
+        // 3. Client incoming Authorization header (excluding cloakd tenant bearer tokens)
+        let tenant_key = tenant.and_then(|t| t.get_provider_key(target.provider_id.as_str()));
+
+        let auth_header = tenant_key
             .map(|key| format!("Bearer {key}"))
+            .or_else(|| {
+                target
+                    .api_key
+                    .as_ref()
+                    .map(|key| format!("Bearer {key}"))
+            })
             .or_else(|| {
                 headers
                     .get(header::AUTHORIZATION)
                     .and_then(|h| h.to_str().ok())
+                    .filter(|s| !s.starts_with("Bearer sk-cloakd-"))
                     .map(|s| s.to_string())
             });
 
@@ -108,9 +118,10 @@ impl UpstreamClient {
         fallback_targets: &[ResolvedTarget],
         headers: &HeaderMap,
         payload: &mut Value,
+        tenant: Option<&TenantConfig>,
     ) -> Result<ForwardResult, CloakdError> {
         // 1. Attempt primary target
-        match self.forward_chat_completion(primary_target, headers, payload).await {
+        match self.forward_chat_completion(primary_target, headers, payload, tenant).await {
             Ok(response) => Ok(ForwardResult {
                 response,
                 effective_target: primary_target.clone(),
@@ -140,9 +151,19 @@ impl UpstreamClient {
                     "Primary upstream returned retryable failure; activating failover chain"
                 );
 
+                // Filter fallback targets by tenant's allowed/configured fallback providers if specified
+                let eligible_fallbacks: Vec<&ResolvedTarget> = if let Some(Some(ref allowed)) = tenant.map(|t| &t.fallback_providers) {
+                    fallback_targets
+                        .iter()
+                        .filter(|t| allowed.contains(&t.provider_id.as_str().to_string()))
+                        .collect()
+                } else {
+                    fallback_targets.iter().collect()
+                };
+
                 // 2. Cascade through fallback targets in order
                 let mut last_error = err;
-                for fallback in fallback_targets {
+                for fallback in eligible_fallbacks {
                     warn!(
                         fallback_provider = %fallback.provider_id,
                         fallback_model = %fallback.model,
@@ -152,7 +173,7 @@ impl UpstreamClient {
                     // Update model name in payload for the fallback provider
                     payload["model"] = Value::String(fallback.model.clone());
 
-                    match self.forward_chat_completion(fallback, headers, payload).await {
+                    match self.forward_chat_completion(fallback, headers, payload, tenant).await {
                         Ok(response) => {
                             info!(
                                 fallback_provider = %fallback.provider_id,

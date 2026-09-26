@@ -30,6 +30,21 @@ impl EntityType {
         }
     }
 
+    pub fn rule_name(&self) -> &'static str {
+        match self {
+            EntityType::Email => "email",
+            EntityType::Nir => "fr_nir",
+            EntityType::CreditCard => "card",
+            EntityType::Iban => "iban",
+            EntityType::Phone => "phone",
+            EntityType::Secret => "secrets",
+            EntityType::IpAddress => "ip",
+            EntityType::UsSsn => "us_ssn",
+            EntityType::UkNino => "uk_nino",
+            EntityType::EsDni => "es_dni",
+        }
+    }
+
     #[allow(dead_code)]
     pub fn display_name(&self) -> &'static str {
         match self {

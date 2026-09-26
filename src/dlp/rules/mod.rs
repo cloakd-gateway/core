@@ -39,7 +39,7 @@ pub trait DlpRule: Send + Sync {
 }
 
 /// Expands packs and tokens into a set of unique rule names.
-fn expand_rule_names(input: &str) -> HashSet<String> {
+pub fn expand_rule_names(input: &str) -> HashSet<String> {
     let mut resolved = HashSet::new();
 
     for raw_token in input.split(|c: char| c == ',' || c.is_whitespace()) {
