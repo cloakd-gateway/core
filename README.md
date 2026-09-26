@@ -200,13 +200,9 @@ CLOAKD_ENABLED_RULES=email,card,iban,secrets,us_ssn
 
 ---
 
-## 🗺️ Product Roadmap & Architecture Strategy
+## 🗺️ Product Roadmap
 
-Cloakd's architecture is intentionally split into two distinct repositories to guarantee zero compromise on latency, resource footprint, and security isolation:
-* **`cloakd-gateway/core`** (This Repository) — The ultra-fast, zero-persistence Rust Data Plane Gateway.
-* **`cloakd-gateway/platform`** (Separate Repository) — The SaaS Control Plane web application, organization management, and billing system.
-
-### 🛡️ Repository: `cloakd-gateway/core` (Data Plane Gateway)
+> *This repository strictly covers the **Data Plane Gateway**. For the SaaS Control Plane web application, organization management, and billing, please refer to the [**Cloakd Platform Roadmap**](https://github.com/cloakd-gateway/platform#-saas-product-roadmap).*
 
 * **v1.0.0 — Production Core (Current Version) :**
   - [x] High-performance stateless Axum HTTP Gateway (`/v1/chat/completions`).
@@ -224,24 +220,6 @@ Cloakd's architecture is intentionally split into two distinct repositories to g
   - [ ] Ultra-fast local LRU config cache (sub-50 µs) with asynchronous sync from the Control Plane.
   - [ ] Prometheus & OpenTelemetry native metrics exporter (`/metrics`).
   - [ ] Standalone air-gapped / Local YAML configuration loader for enterprise on-premise deployments.
-
----
-
-### 🌐 Repository: `cloakd-gateway/platform` (SaaS Control Plane)
-
-* **v1.0.0 — SaaS MVP (Control Plane Foundation) :**
-  - [ ] Modern Web Management Console (Next.js, Tailwind, Shadcn UI).
-  - [ ] Multi-Tenant & Multi-Organization architecture with RBAC (Owner, Admin, Member).
-  - [ ] Bring-Your-Own-Key (BYOK) provider credential storage with AES-256-GCM envelope encryption.
-  - [ ] API Key issuance & token lifecycle management (`sk-cloakd-tenant...`).
-  - [ ] Visual DLP rule configuration & fallback chain reordering per organization.
-  - [ ] Stripe integration for usage-based billing, subscriptions, and quota enforcement.
-
-* **v2.0.0 — Enterprise SaaS :**
-  - [ ] Enterprise SSO / SAML 2.0 / OIDC authentication (Okta, Microsoft Entra ID, Google Workspace).
-  - [ ] FinOps & Privacy Analytics Dashboard (tokens saved, cache hit ratios, PII masked count).
-  - [ ] Team audit logs and compliance reporting (RGPD / CRA readiness export).
-  - [ ] Webhook alerts for quota limits or abnormal DLP spikes.
 
 ---
 
