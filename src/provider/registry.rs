@@ -85,40 +85,6 @@ impl ProviderRegistry {
         })
     }
 
-    /// Resolves available fallback targets excluding the primary provider, sorted by preferred order.
-    pub fn resolve_fallbacks(
-        &self,
-        primary_id: &ProviderId,
-        preferred_order: &[String],
-    ) -> Vec<ResolvedTarget> {
-        let mut candidates = Vec::new();
-
-        for provider in &self.providers {
-            if provider.id() == *primary_id {
-                continue;
-            }
-            // A provider is an eligible fallback if credentials are configured
-            if provider.api_key().is_some() || matches!(provider.id(), ProviderId::Custom(_)) {
-                candidates.push(ResolvedTarget {
-                    provider_id: provider.id(),
-                    target_url: provider.endpoint_url(),
-                    api_key: provider.api_key().map(|s| s.to_string()),
-                    model: provider.default_model().to_string(),
-                });
-            }
-        }
-
-        // Sort candidates based on configured preferred_order
-        candidates.sort_by_key(|target| {
-            preferred_order
-                .iter()
-                .position(|name| name.eq_ignore_ascii_case(target.provider_id.as_str()))
-                .unwrap_or(usize::MAX)
-        });
-
-        candidates
-    }
-
     /// Resolves fallback targets directly from an ordered list of model names (e.g. ["gpt-4o-mini", "claude-3-5-haiku"]).
     /// Each model is mapped to its corresponding provider and endpoint.
     pub fn resolve_fallback_models(
@@ -170,7 +136,7 @@ mod tests {
             cache_ttl_secs: 3600,
             cache_max_capacity: 1000,
             failover_enabled: true,
-            fallback_providers: vec!["gemini".to_string(), "openai".to_string()],
+            fallback_models: vec!["gpt-4o-mini".to_string(), "claude-3-5-haiku".to_string()],
             tenants_file: None,
             allow_anonymous: true,
         }
@@ -252,20 +218,6 @@ mod tests {
         let target = registry.resolve(None).unwrap();
         assert_eq!(target.provider_id, ProviderId::OpenAI);
         assert_eq!(target.model, "gpt-4o-mini");
-    }
-
-    #[test]
-    fn test_resolve_fallbacks_order() {
-        let config = mock_config("gemini-3.8-flash");
-        let registry = ProviderRegistry::from_config(&config);
-
-        let preferred = vec!["openai".to_string(), "anthropic".to_string()];
-        let fallbacks = registry.resolve_fallbacks(&ProviderId::Gemini, &preferred);
-
-        // Fallbacks should exclude Gemini and contain OpenAI first, then Anthropic
-        assert_eq!(fallbacks.len(), 2);
-        assert_eq!(fallbacks[0].provider_id, ProviderId::OpenAI);
-        assert_eq!(fallbacks[1].provider_id, ProviderId::Anthropic);
     }
 
     #[test]

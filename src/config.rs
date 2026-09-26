@@ -18,7 +18,7 @@ pub struct AppConfig {
     pub cache_ttl_secs: u64,
     pub cache_max_capacity: u64,
     pub failover_enabled: bool,
-    pub fallback_providers: Vec<String>,
+    pub fallback_models: Vec<String>,
     pub tenants_file: Option<String>,
     pub allow_anonymous: bool,
 }
@@ -83,10 +83,10 @@ impl AppConfig {
             .map(|v| v.to_lowercase() != "false" && v != "0")
             .unwrap_or(true);
 
-        let fallback_providers = env::var("CLOAKD_FALLBACK_PROVIDERS")
-            .unwrap_or_else(|_| "gemini,openai,anthropic".to_string())
+        let fallback_models = env::var("CLOAKD_FALLBACK_MODELS")
+            .unwrap_or_else(|_| "gpt-4o-mini,claude-3-5-haiku".to_string())
             .split(',')
-            .map(|s| s.trim().to_lowercase())
+            .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
             .collect();
 
@@ -114,7 +114,7 @@ impl AppConfig {
             cache_ttl_secs,
             cache_max_capacity,
             failover_enabled,
-            fallback_providers,
+            fallback_models,
             tenants_file,
             allow_anonymous,
         })

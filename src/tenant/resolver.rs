@@ -154,7 +154,7 @@ mod tests {
             cache_ttl_secs: 3600,
             cache_max_capacity: 1000,
             failover_enabled: true,
-            fallback_providers: vec!["gemini".to_string()],
+            fallback_models: vec!["gpt-4o-mini".to_string()],
             tenants_file: None,
             allow_anonymous: true,
         }
@@ -191,7 +191,6 @@ mod tests {
             fallback_models: None,
             enabled_rules: tenant_rules,
             provider_keys: HashMap::new(),
-            fallback_providers: None,
             cache_enabled: true,
             rate_limit_rpm: None,
         };

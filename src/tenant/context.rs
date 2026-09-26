@@ -50,8 +50,6 @@ pub struct TenantConfig {
     pub allowed_models: Option<Vec<String>>,
     /// Fallback models sequence (e.g. ["gpt-4o-mini", "claude-3-5-haiku"])
     pub fallback_models: Option<Vec<String>>,
-    /// Custom fallback ordering for providers (kept for backward compatibility)
-    pub fallback_providers: Option<Vec<String>>,
     /// Set of active DLP rules (e.g. "email", "card", "iban", "fr_nir")
     pub enabled_rules: HashSet<String>,
     /// BYOK (Bring-Your-Own-Key) credentials mapped by provider_id
@@ -82,6 +80,12 @@ impl TenantConfig {
 
         let enabled_rules = crate::dlp::rules::expand_rule_names(&config.enabled_rules);
 
+        let fallback_models = if config.fallback_models.is_empty() {
+            None
+        } else {
+            Some(config.fallback_models.clone())
+        };
+
         Self {
             id: TenantId::from("default"),
             organization_name: "Default (Standalone)".to_string(),
@@ -90,8 +94,7 @@ impl TenantConfig {
             role: None,
             default_model: Some(config.default_model.clone()),
             allowed_models: None,
-            fallback_models: None,
-            fallback_providers: Some(config.fallback_providers.clone()),
+            fallback_models,
             enabled_rules,
             provider_keys,
             cache_enabled: config.cache_enabled,
@@ -123,11 +126,18 @@ impl TenantConfig {
             .or_else(|| role.and_then(|r| r.allowed_models.clone()))
             .or_else(|| tenant.allowed_models.clone());
 
-        // 3. fallback_models: User > Role > Tenant
+        // 3. fallback_models: User > Role > Tenant > AppConfig
         let fallback_models = user
             .and_then(|u| u.fallback_models.clone())
             .or_else(|| role.and_then(|r| r.fallback_models.clone()))
-            .or_else(|| tenant.fallback_models.clone());
+            .or_else(|| tenant.fallback_models.clone())
+            .or_else(|| {
+                if app_config.fallback_models.is_empty() {
+                    None
+                } else {
+                    Some(app_config.fallback_models.clone())
+                }
+            });
 
         // 4. rate_limit_rpm: User > Role > Tenant
         let rate_limit_rpm = user
@@ -193,7 +203,6 @@ impl TenantConfig {
             default_model,
             allowed_models,
             fallback_models,
-            fallback_providers: Some(app_config.fallback_providers.clone()),
             enabled_rules,
             provider_keys,
             cache_enabled,
@@ -285,7 +294,6 @@ mod tests {
             fallback_models: None,
             enabled_rules: rules,
             provider_keys: HashMap::new(),
-            fallback_providers: None,
             cache_enabled: true,
             rate_limit_rpm: Some(100),
         };
@@ -311,7 +319,6 @@ mod tests {
             fallback_models: None,
             enabled_rules: HashSet::new(),
             provider_keys: keys,
-            fallback_providers: None,
             cache_enabled: true,
             rate_limit_rpm: None,
         };
@@ -333,7 +340,6 @@ mod tests {
             fallback_models: None,
             enabled_rules: HashSet::new(),
             provider_keys: HashMap::new(),
-            fallback_providers: None,
             cache_enabled: true,
             rate_limit_rpm: None,
         };
@@ -361,7 +367,7 @@ mod tests {
             cache_ttl_secs: 3600,
             cache_max_capacity: 10000,
             failover_enabled: true,
-            fallback_providers: vec!["gemini".to_string()],
+            fallback_models: vec!["gpt-4o-mini".to_string()],
             log_level: "info".to_string(),
             tenants_file: None,
             allow_anonymous: true,

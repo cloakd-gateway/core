@@ -151,19 +151,9 @@ impl UpstreamClient {
                     "Primary upstream returned retryable failure; activating failover chain"
                 );
 
-                // Filter fallback targets by tenant's allowed/configured fallback providers if specified
-                let eligible_fallbacks: Vec<&ResolvedTarget> = if let Some(Some(ref allowed)) = tenant.map(|t| &t.fallback_providers) {
-                    fallback_targets
-                        .iter()
-                        .filter(|t| allowed.contains(&t.provider_id.as_str().to_string()))
-                        .collect()
-                } else {
-                    fallback_targets.iter().collect()
-                };
-
                 // 2. Cascade through fallback targets in order
                 let mut last_error = err;
-                for fallback in eligible_fallbacks {
+                for fallback in fallback_targets {
                     warn!(
                         fallback_provider = %fallback.provider_id,
                         fallback_model = %fallback.model,

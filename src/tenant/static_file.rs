@@ -14,7 +14,7 @@ struct LegacyTenantEntry {
     pub organization_name: Option<String>,
     pub enabled_rules: Option<Vec<String>>,
     pub provider_keys: Option<HashMap<String, String>>,
-    pub fallback_providers: Option<Vec<String>>,
+    pub fallback_models: Option<Vec<String>>,
     pub cache_enabled: Option<bool>,
     pub rate_limit_rpm: Option<u32>,
 }
@@ -114,7 +114,7 @@ pub fn load_tenants_from_path<P: AsRef<Path>>(
                         name: entry.organization_name,
                         default_model: None,
                         allowed_models: None,
-                        fallback_models: entry.fallback_providers,
+                        fallback_models: entry.fallback_models,
                         enabled_rules: entry.enabled_rules,
                         provider_keys: entry.provider_keys,
                         rate_limit_rpm: entry.rate_limit_rpm,
@@ -271,7 +271,7 @@ pub fn load_tenants_from_file<P: AsRef<Path>>(
         cache_ttl_secs: 3600,
         cache_max_capacity: 10000,
         failover_enabled: true,
-        fallback_providers: vec!["gemini".to_string(), "openai".to_string()],
+        fallback_models: vec!["gemini-1.5-flash".to_string(), "gpt-4o-mini".to_string()],
         log_level: "info".to_string(),
         tenants_file: None,
         allow_anonymous: true,
@@ -297,9 +297,9 @@ tenants:
       - eu
     provider_keys:
       openai: sk-proj-alpha-123
-    fallback_providers:
-      - openai
-      - gemini
+    fallback_models:
+      - gpt-4o-mini
+      - gemini-1.5-flash
     cache_enabled: true
     rate_limit_rpm: 300
 "#;
@@ -375,7 +375,7 @@ key: sk-cloakd-alice-7788
             cache_ttl_secs: 3600,
             cache_max_capacity: 10000,
             failover_enabled: true,
-            fallback_providers: vec!["gemini".to_string()],
+            fallback_models: vec!["gemini-1.5-flash".to_string()],
             log_level: "info".to_string(),
             tenants_file: None,
             allow_anonymous: true,

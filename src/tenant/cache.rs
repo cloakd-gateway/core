@@ -70,7 +70,6 @@ mod tests {
             fallback_models: None,
             enabled_rules: HashSet::new(),
             provider_keys: HashMap::new(),
-            fallback_providers: None,
             cache_enabled: true,
             rate_limit_rpm: None,
         };

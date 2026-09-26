@@ -190,15 +190,10 @@ pub async fn chat_completions(
     // 4. Upstream call with Failover
     let fallback_targets = if let Some(ref fallback_models) = tenant.fallback_models {
         state.provider_registry.resolve_fallback_models(fallback_models, &resolved_target.model)
+    } else if !state.config.fallback_models.is_empty() {
+        state.provider_registry.resolve_fallback_models(&state.config.fallback_models, &resolved_target.model)
     } else {
-        let fallback_order = tenant
-            .fallback_providers
-            .as_ref()
-            .unwrap_or(&state.config.fallback_providers);
-        state.provider_registry.resolve_fallbacks(
-            &resolved_target.provider_id,
-            fallback_order,
-        )
+        Vec::new()
     };
 
     let forward_result = state

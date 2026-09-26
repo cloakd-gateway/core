@@ -50,18 +50,18 @@ Cloakd automatically determines which upstream provider to route to based on the
 | `CLOAKD_CACHE_TTL_SECS` | Integer | `3600` | Time-To-Live for cached completions in seconds (default is 1 hour). |
 | `CLOAKD_CACHE_MAX_CAPACITY` | Integer | `10000` | Maximum number of cached prompt entries before TinyLFU eviction. |
 
-### Resilience & Multi-Provider Failover (V2)
+### Resilience & Multi-Model Failover (V2)
 
 | Variable | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `CLOAKD_FAILOVER_ENABLED` | Boolean | `true` | Enables automatic failover to fallback providers upon HTTP 429 or 5xx errors. |
-| `CLOAKD_FALLBACK_PROVIDERS` | String | `gemini,openai,anthropic` | Comma-separated preferred order of fallback providers. |
+| `CLOAKD_FAILOVER_ENABLED` | Boolean | `true` | Enables automatic failover to fallback models upon HTTP 429 or 5xx errors. |
+| `CLOAKD_FALLBACK_MODELS` | String | `gpt-4o-mini,claude-3-5-haiku` | Comma-separated preferred sequence of fallback models. |
 
 ### Multi-Tenancy & Access Control (v1.1.0)
 
 | Variable | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `CLOAKD_TENANTS_FILE` | String | *None* | Path to a local YAML or JSON file defining static tenants (`config/tenants.yaml`). |
+| `CLOAKD_TENANTS_FILE` | String | *None* | Path to a local YAML or JSON file or directory defining static tenants (`config/tenants.yaml`). |
 | `CLOAKD_ALLOW_ANONYMOUS` | Boolean | `true` | When `true`, requests without a valid tenant key use the default configuration. When `false`, unauthenticated requests return `401 Unauthorized`. |
 
 ---
@@ -81,7 +81,7 @@ OPENAI_API_KEY=sk-proj-...
 CLOAKD_ENABLED_RULES=default,us,uk
 CLOAKD_CACHE_ENABLED=true
 CLOAKD_FAILOVER_ENABLED=true
-CLOAKD_FALLBACK_PROVIDERS=gemini,openai
+CLOAKD_FALLBACK_MODELS=gpt-4o-mini
 ```
 
 ### Profile B: Strict European Banking & FinOps Profile
