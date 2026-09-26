@@ -2,10 +2,12 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 
+type RequestMetricKey = (String, String, u16, String);
+
 /// Thread-safe in-memory metrics collector producing Prometheus text format.
 #[derive(Default)]
 pub struct MetricsCollector {
-    requests: RwLock<HashMap<(String, u16, String), Arc<AtomicU64>>>,
+    requests: RwLock<HashMap<RequestMetricKey, Arc<AtomicU64>>>,
     dlp_entities: RwLock<HashMap<(String, String), Arc<AtomicU64>>>,
     cache_hits: RwLock<HashMap<String, Arc<AtomicU64>>>,
     cache_misses: RwLock<HashMap<String, Arc<AtomicU64>>>,
@@ -17,9 +19,14 @@ impl MetricsCollector {
         Self::default()
     }
 
-    /// Records an HTTP request completion.
-    pub fn record_request(&self, tenant: &str, status: u16, cache: &str) {
-        let key = (tenant.to_string(), status, cache.to_string());
+    /// Records an HTTP request completion with tenant and role.
+    pub fn record_request(&self, tenant: &str, role: &str, status: u16, cache: &str) {
+        let key = (
+            tenant.to_string(),
+            role.to_string(),
+            status,
+            cache.to_string(),
+        );
         self.increment_counter(&self.requests, key, 1);
     }
 
@@ -80,10 +87,10 @@ impl MetricsCollector {
         out.push_str("# TYPE cloakd_http_requests_total counter\n");
         {
             let guard = self.requests.read().unwrap();
-            for ((tenant, status, cache), counter) in guard.iter() {
+            for ((tenant, role, status, cache), counter) in guard.iter() {
                 let val = counter.load(Ordering::Relaxed);
                 out.push_str(&format!(
-                    "cloakd_http_requests_total{{tenant=\"{tenant}\",status=\"{status}\",cache=\"{cache}\"}} {val}\n"
+                    "cloakd_http_requests_total{{tenant=\"{tenant}\",role=\"{role}\",status=\"{status}\",cache=\"{cache}\"}} {val}\n"
                 ));
             }
         }
@@ -156,17 +163,17 @@ mod tests {
     fn test_metrics_collector() {
         let collector = MetricsCollector::new();
 
-        collector.record_request("tenant-1", 200, "HIT");
-        collector.record_request("tenant-1", 200, "HIT");
-        collector.record_request("tenant-2", 500, "MISS");
+        collector.record_request("tenant-1", "developer", 200, "HIT");
+        collector.record_request("tenant-1", "developer", 200, "HIT");
+        collector.record_request("tenant-2", "admin", 500, "MISS");
         collector.record_masked_entity("tenant-1", "EMAIL", 3);
         collector.record_cache_hit("tenant-1");
         collector.record_cache_miss("tenant-2");
         collector.record_failover("gemini", "openai");
 
         let rendered = collector.render_prometheus();
-        assert!(rendered.contains("cloakd_http_requests_total{tenant=\"tenant-1\",status=\"200\",cache=\"HIT\"} 2"));
-        assert!(rendered.contains("cloakd_http_requests_total{tenant=\"tenant-2\",status=\"500\",cache=\"MISS\"} 1"));
+        assert!(rendered.contains("cloakd_http_requests_total{tenant=\"tenant-1\",role=\"developer\",status=\"200\",cache=\"HIT\"} 2"));
+        assert!(rendered.contains("cloakd_http_requests_total{tenant=\"tenant-2\",role=\"admin\",status=\"500\",cache=\"MISS\"} 1"));
         assert!(rendered.contains("cloakd_dlp_masked_entities_total{tenant=\"tenant-1\",entity=\"EMAIL\"} 3"));
         assert!(rendered.contains("cloakd_cache_hits_total{tenant=\"tenant-1\"} 1"));
         assert!(rendered.contains("cloakd_cache_misses_total{tenant=\"tenant-2\"} 1"));

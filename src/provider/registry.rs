@@ -119,6 +119,28 @@ impl ProviderRegistry {
         candidates
     }
 
+    /// Resolves fallback targets directly from an ordered list of model names (e.g. ["gpt-4o-mini", "claude-3-5-haiku"]).
+    /// Each model is mapped to its corresponding provider and endpoint.
+    pub fn resolve_fallback_models(
+        &self,
+        fallback_models: &[String],
+        primary_model: &str,
+    ) -> Vec<ResolvedTarget> {
+        let mut targets = Vec::new();
+        for model in fallback_models {
+            let trimmed = model.trim();
+            if trimmed.is_empty() || trimmed.eq_ignore_ascii_case(primary_model) {
+                continue;
+            }
+            if let Ok(target) = self.resolve(Some(trimmed)) {
+                if !targets.iter().any(|t: &ResolvedTarget| t.model == target.model) {
+                    targets.push(target);
+                }
+            }
+        }
+        targets
+    }
+
     fn get_default_provider(&self) -> Arc<dyn LlmProvider> {
         self.providers
             .iter()
@@ -244,5 +266,24 @@ mod tests {
         assert_eq!(fallbacks.len(), 2);
         assert_eq!(fallbacks[0].provider_id, ProviderId::OpenAI);
         assert_eq!(fallbacks[1].provider_id, ProviderId::Anthropic);
+    }
+
+    #[test]
+    fn test_resolve_fallback_models() {
+        let config = mock_config("gemini-3.8-flash");
+        let registry = ProviderRegistry::from_config(&config);
+
+        let fallback_models = vec![
+            "gpt-4o-mini".to_string(),
+            "claude-3-7-sonnet".to_string(),
+            "gemini-3.8-flash".to_string(), // should be ignored because it matches primary
+        ];
+
+        let targets = registry.resolve_fallback_models(&fallback_models, "gemini-3.8-flash");
+        assert_eq!(targets.len(), 2);
+        assert_eq!(targets[0].provider_id, ProviderId::OpenAI);
+        assert_eq!(targets[0].model, "gpt-4o-mini");
+        assert_eq!(targets[1].provider_id, ProviderId::Anthropic);
+        assert_eq!(targets[1].model, "claude-3-7-sonnet");
     }
 }

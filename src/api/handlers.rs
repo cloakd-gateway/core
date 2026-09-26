@@ -105,7 +105,19 @@ pub async fn chat_completions(
 
     // 1. Resolve Provider and Model
     let requested_model = payload.get("model").and_then(Value::as_str);
-    let resolved_target = state.provider_registry.resolve(requested_model)?;
+    let resolved_model_name = match requested_model {
+        Some(m) if !m.trim().is_empty() => m.trim(),
+        _ => tenant.effective_default_model(&state.config.default_model),
+    };
+
+    // 1.1 Verify model authorization against allowed_models
+    if !tenant.is_model_allowed(resolved_model_name) {
+        return Err(CloakdError::Forbidden(format!(
+            "Model '{resolved_model_name}' is not authorized for your role or organization"
+        )));
+    }
+
+    let resolved_target = state.provider_registry.resolve(Some(resolved_model_name))?;
 
     // Ensure payload model reflects the resolved model (handling defaults and alias migrations)
     payload["model"] = Value::String(resolved_target.model.clone());
@@ -122,6 +134,8 @@ pub async fn chat_completions(
     debug!(
         is_streaming,
         tenant_id = %tenant.id,
+        user_id = ?tenant.user_id,
+        role = ?tenant.role,
         provider = %resolved_target.provider_id,
         model = %resolved_target.model,
         masked_entities = masked_count,
@@ -135,6 +149,8 @@ pub async fn chat_completions(
         None
     };
 
+    let caller_role = tenant.role.as_deref().unwrap_or("default");
+
     if !is_streaming {
         if let Some(ref key) = cache_key {
             if let Some(mut cached_val) = state.prompt_cache.get(key).await {
@@ -143,11 +159,11 @@ pub async fn chat_completions(
 
                 // Record metrics
                 state.metrics.record_cache_hit(tenant.id.as_str());
-                state.metrics.record_request(tenant.id.as_str(), 200, "HIT");
+                state.metrics.record_request(tenant.id.as_str(), caller_role, 200, "HIT");
                 state.metrics.record_masked_entity(tenant.id.as_str(), "ALL", masked_count as u64);
 
                 let serialized = serde_json::to_vec(&cached_val)?;
-                return Response::builder()
+                let mut builder = Response::builder()
                     .status(StatusCode::OK)
                     .header(header::CONTENT_TYPE, "application/json")
                     .header("x-cloakd-tenant-id", tenant.id.to_string())
@@ -155,7 +171,16 @@ pub async fn chat_completions(
                     .header("x-cloakd-fallback", "false")
                     .header("x-cloakd-masked-count", masked_count.to_string())
                     .header("x-cloakd-provider", resolved_target.provider_id.as_str())
-                    .header("x-cloakd-model", &resolved_target.model)
+                    .header("x-cloakd-model", &resolved_target.model);
+
+                if let Some(ref uid) = tenant.user_id {
+                    builder = builder.header("x-cloakd-user-id", uid.as_str());
+                }
+                if let Some(ref r) = tenant.role {
+                    builder = builder.header("x-cloakd-role", r.as_str());
+                }
+
+                return builder
                     .body(Body::from(serialized))
                     .map_err(|e| CloakdError::Internal(anyhow::anyhow!("Failed to build cached response: {e}")));
             }
@@ -163,15 +188,18 @@ pub async fn chat_completions(
     }
 
     // 4. Upstream call with Failover
-    let fallback_order = tenant
-        .fallback_providers
-        .as_ref()
-        .unwrap_or(&state.config.fallback_providers);
-
-    let fallback_targets = state.provider_registry.resolve_fallbacks(
-        &resolved_target.provider_id,
-        fallback_order,
-    );
+    let fallback_targets = if let Some(ref fallback_models) = tenant.fallback_models {
+        state.provider_registry.resolve_fallback_models(fallback_models, &resolved_target.model)
+    } else {
+        let fallback_order = tenant
+            .fallback_providers
+            .as_ref()
+            .unwrap_or(&state.config.fallback_providers);
+        state.provider_registry.resolve_fallbacks(
+            &resolved_target.provider_id,
+            fallback_order,
+        )
+    };
 
     let forward_result = state
         .upstream_client
@@ -185,7 +213,7 @@ pub async fn chat_completions(
     // 5. Egress Processing
     if is_streaming {
         // Record metrics
-        state.metrics.record_request(tenant.id.as_str(), 200, "BYPASS");
+        state.metrics.record_request(tenant.id.as_str(), caller_role, 200, "BYPASS");
         state.metrics.record_masked_entity(tenant.id.as_str(), "ALL", masked_count as u64);
         if let Some(ref orig) = original_provider {
             state.metrics.record_failover(orig.as_str(), effective_target.provider_id.as_str());
@@ -210,6 +238,12 @@ pub async fn chat_completions(
             .header("x-cloakd-provider", effective_target.provider_id.as_str())
             .header("x-cloakd-model", &effective_target.model);
 
+        if let Some(ref uid) = tenant.user_id {
+            builder = builder.header("x-cloakd-user-id", uid.as_str());
+        }
+        if let Some(ref r) = tenant.role {
+            builder = builder.header("x-cloakd-role", r.as_str());
+        }
         if let Some(ref orig) = original_provider {
             builder = builder.header("x-cloakd-fallback-from", orig.as_str());
         }
@@ -238,7 +272,7 @@ pub async fn chat_completions(
 
         // Record metrics
         state.metrics.record_cache_miss(tenant.id.as_str());
-        state.metrics.record_request(tenant.id.as_str(), 200, "MISS");
+        state.metrics.record_request(tenant.id.as_str(), caller_role, 200, "MISS");
         state.metrics.record_masked_entity(tenant.id.as_str(), "ALL", masked_count as u64);
         if let Some(ref orig) = original_provider {
             state.metrics.record_failover(orig.as_str(), effective_target.provider_id.as_str());
@@ -256,6 +290,12 @@ pub async fn chat_completions(
             .header("x-cloakd-provider", effective_target.provider_id.as_str())
             .header("x-cloakd-model", &effective_target.model);
 
+        if let Some(ref uid) = tenant.user_id {
+            builder = builder.header("x-cloakd-user-id", uid.as_str());
+        }
+        if let Some(ref r) = tenant.role {
+            builder = builder.header("x-cloakd-role", r.as_str());
+        }
         if let Some(ref orig) = original_provider {
             builder = builder.header("x-cloakd-fallback-from", orig.as_str());
         }
@@ -344,5 +384,12 @@ mod tests {
         // User B sees their own email, and zero trace of Alice's email!
         assert_eq!(user_b_content, "Account bob@partner.fr is active.");
         assert!(!user_b_content.contains("alice@corp.com"));
+    }
+
+    #[test]
+    fn test_model_authorization_forbidden_error() {
+        let err = CloakdError::Forbidden("Model 'o1' is not authorized for your role".to_string());
+        let response = err.into_response();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
 }

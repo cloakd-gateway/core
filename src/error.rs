@@ -24,6 +24,9 @@ pub enum CloakdError {
     #[error("Authentication error: {0}")]
     Auth(String),
 
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
+
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 
@@ -37,6 +40,11 @@ impl IntoResponse for CloakdError {
             CloakdError::Auth(msg) => (
                 StatusCode::UNAUTHORIZED,
                 "authentication_error",
+                msg,
+            ),
+            CloakdError::Forbidden(msg) => (
+                StatusCode::FORBIDDEN,
+                "forbidden_error",
                 msg,
             ),
             CloakdError::InvalidRequest(msg) => (
