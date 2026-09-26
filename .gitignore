@@ -8,6 +8,19 @@
 .env.*
 !.env.example
 
+# Tenant configuration manifests & BYOK secrets (Never commit real API keys!)
+config/tenants.yaml
+config/tenants.yml
+config/tenants.json
+config/tenants/
+conf.d/
+tenants.yaml
+tenants.yml
+tenants.json
+!config/tenants.yaml.example
+!*.example
+!*.example.*
+
 # IDEs & Editor configurations
 .idea/
 *.iml
