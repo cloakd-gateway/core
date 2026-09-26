@@ -2,9 +2,10 @@ use crate::api::handlers;
 use crate::cache::PromptCache;
 use crate::config::AppConfig;
 use crate::dlp::DlpPipeline;
+use crate::metrics::MetricsCollector;
 use crate::provider::ProviderRegistry;
-use crate::upstream::UpstreamClient;
 use crate::tenant::TenantResolver;
+use crate::upstream::UpstreamClient;
 use axum::routing::{get, post};
 use axum::Router;
 use std::sync::Arc;
@@ -19,6 +20,7 @@ pub struct AppState {
     pub provider_registry: Arc<ProviderRegistry>,
     pub prompt_cache: Arc<PromptCache>,
     pub tenant_resolver: Arc<TenantResolver>,
+    pub metrics: Arc<MetricsCollector>,
 }
 
 pub fn create_router(state: AppState) -> Router {
@@ -29,6 +31,7 @@ pub fn create_router(state: AppState) -> Router {
 
     Router::new()
         .route("/health", get(handlers::health))
+        .route("/metrics", get(handlers::metrics))
         .route("/v1/chat/completions", post(handlers::chat_completions))
         .layer(TraceLayer::new_for_http())
         .layer(cors)

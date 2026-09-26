@@ -7,10 +7,12 @@ use tracing::debug;
 
 pub trait DlpPipeline: Send + Sync {
     /// Masks PII entities within a text string, updating the session vault.
+    #[allow(dead_code)]
     fn mask_text(&self, text: &str, vault: &mut SessionVault) -> String;
 
     /// Traverses and masks sensitive data in an OpenAI-compatible chat completion payload.
     /// Returns the total number of masked entities.
+    #[allow(dead_code)]
     fn mask_chat_payload(&self, payload: &mut Value, vault: &mut SessionVault) -> usize;
 
     /// Masks sensitive entities within a text string using only the rules enabled for the given tenant.
@@ -53,6 +55,7 @@ impl DlpEngine {
     }
 
     /// Finds all non-overlapping PII matches across all registered rules.
+    #[allow(dead_code)]
     fn extract_matches(&self, text: &str) -> Vec<MatchSpan> {
         let mut candidates = Vec::new();
 

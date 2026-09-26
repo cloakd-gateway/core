@@ -6,6 +6,12 @@ use std::collections::{HashMap, HashSet};
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct TenantId(pub String);
 
+impl TenantId {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 impl std::fmt::Display for TenantId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
@@ -96,6 +102,7 @@ impl TenantContext {
         Self { config }
     }
 
+    #[allow(dead_code)]
     pub fn id(&self) -> &TenantId {
         &self.config.id
     }

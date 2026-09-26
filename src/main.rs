@@ -3,6 +3,7 @@ mod cache;
 mod config;
 mod dlp;
 mod error;
+mod metrics;
 mod provider;
 mod stream;
 mod tenant;
@@ -13,6 +14,7 @@ use crate::api::{create_router, AppState};
 use crate::cache::PromptCache;
 use crate::config::AppConfig;
 use crate::dlp::DlpEngine;
+use crate::metrics::MetricsCollector;
 use crate::provider::ProviderRegistry;
 use crate::tenant::TenantResolver;
 use crate::upstream::UpstreamClient;
@@ -56,6 +58,8 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(TenantResolver::from_app_config(&config))
     };
 
+    let metrics = Arc::new(MetricsCollector::new());
+
     let state = AppState {
         config: config_arc,
         upstream_client,
@@ -63,6 +67,7 @@ async fn main() -> anyhow::Result<()> {
         provider_registry,
         prompt_cache,
         tenant_resolver,
+        metrics,
     };
 
     let app = create_router(state);

@@ -31,11 +31,13 @@ impl TenantCache {
     }
 
     /// Invalidates a specific tenant key from the cache (e.g. upon webhook or config update).
+    #[allow(dead_code)]
     pub async fn invalidate(&self, key: &str) {
         self.cache.invalidate(key).await;
     }
 
     /// Clears the entire tenant cache.
+    #[allow(dead_code)]
     pub async fn invalidate_all(&self) {
         self.cache.invalidate_all();
     }
@@ -76,6 +78,10 @@ mod tests {
         assert_eq!(retrieved.unwrap().id, TenantId::from("tenant-alpha"));
 
         cache.invalidate("sk-cloakd-alpha").await;
+        assert!(cache.get("sk-cloakd-alpha").await.is_none());
+
+        cache.insert("sk-cloakd-alpha".to_string(), config.clone()).await;
+        cache.invalidate_all().await;
         assert!(cache.get("sk-cloakd-alpha").await.is_none());
     }
 }

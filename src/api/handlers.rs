@@ -21,6 +21,16 @@ pub async fn health() -> impl IntoResponse {
     })
 }
 
+/// Prometheus metrics endpoint.
+pub async fn metrics(State(state): State<AppState>) -> impl IntoResponse {
+    let body = state.metrics.render_prometheus();
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "text/plain; version=0.0.4; charset=utf-8")
+        .body(Body::from(body))
+        .unwrap()
+}
+
 /// Helper to restore PII placeholders across choice messages in a chat completion JSON response.
 fn restore_pii_in_response(response_json: &mut Value, vault: &SessionVault) {
     if let Some(choices) = response_json.get_mut("choices").and_then(Value::as_array_mut) {
@@ -131,6 +141,11 @@ pub async fn chat_completions(
                 // Restore PII using the current session's vault
                 restore_pii_in_response(&mut cached_val, &vault);
 
+                // Record metrics
+                state.metrics.record_cache_hit(tenant.id.as_str());
+                state.metrics.record_request(tenant.id.as_str(), 200, "HIT");
+                state.metrics.record_masked_entity(tenant.id.as_str(), "ALL", masked_count as u64);
+
                 let serialized = serde_json::to_vec(&cached_val)?;
                 return Response::builder()
                     .status(StatusCode::OK)
@@ -169,6 +184,13 @@ pub async fn chat_completions(
 
     // 5. Egress Processing
     if is_streaming {
+        // Record metrics
+        state.metrics.record_request(tenant.id.as_str(), 200, "BYPASS");
+        state.metrics.record_masked_entity(tenant.id.as_str(), "ALL", masked_count as u64);
+        if let Some(ref orig) = original_provider {
+            state.metrics.record_failover(orig.as_str(), effective_target.provider_id.as_str());
+        }
+
         // Mode SSE Streaming
         let vault_arc = Arc::new(vault);
         let stream = forward_result.response.bytes_stream();
@@ -213,6 +235,14 @@ pub async fn chat_completions(
 
         // De-tokenize response
         restore_pii_in_response(&mut response_json, &vault);
+
+        // Record metrics
+        state.metrics.record_cache_miss(tenant.id.as_str());
+        state.metrics.record_request(tenant.id.as_str(), 200, "MISS");
+        state.metrics.record_masked_entity(tenant.id.as_str(), "ALL", masked_count as u64);
+        if let Some(ref orig) = original_provider {
+            state.metrics.record_failover(orig.as_str(), effective_target.provider_id.as_str());
+        }
 
         let serialized = serde_json::to_vec(&response_json)?;
 
