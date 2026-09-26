@@ -21,6 +21,9 @@ pub enum CloakdError {
     #[error("Stream processing error: {0}")]
     Stream(String),
 
+    #[error("Authentication error: {0}")]
+    Auth(String),
+
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 
@@ -31,6 +34,11 @@ pub enum CloakdError {
 impl IntoResponse for CloakdError {
     fn into_response(self) -> Response {
         let (status, err_type, message) = match self {
+            CloakdError::Auth(msg) => (
+                StatusCode::UNAUTHORIZED,
+                "authentication_error",
+                msg,
+            ),
             CloakdError::InvalidRequest(msg) => (
                 StatusCode::BAD_REQUEST,
                 "invalid_request_error",

@@ -19,6 +19,8 @@ pub struct AppConfig {
     pub cache_max_capacity: u64,
     pub failover_enabled: bool,
     pub fallback_providers: Vec<String>,
+    pub tenants_file: Option<String>,
+    pub allow_anonymous: bool,
 }
 
 impl AppConfig {
@@ -88,6 +90,15 @@ impl AppConfig {
             .filter(|s| !s.is_empty())
             .collect();
 
+        let tenants_file = env::var("CLOAKD_TENANTS_FILE")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+
+        let allow_anonymous = env::var("CLOAKD_ALLOW_ANONYMOUS")
+            .map(|v| v.to_lowercase() != "false" && v != "0")
+            .unwrap_or(true);
+
         Ok(Self {
             host,
             port,
@@ -104,6 +115,8 @@ impl AppConfig {
             cache_max_capacity,
             failover_enabled,
             fallback_providers,
+            tenants_file,
+            allow_anonymous,
         })
     }
 

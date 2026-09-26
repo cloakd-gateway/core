@@ -149,6 +149,8 @@ mod tests {
             cache_max_capacity: 1000,
             failover_enabled: true,
             fallback_providers: vec!["gemini".to_string(), "openai".to_string()],
+            tenants_file: None,
+            allow_anonymous: true,
         }
     }
 
