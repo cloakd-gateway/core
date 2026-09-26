@@ -1,0 +1,50 @@
+[package]
+name = "cloakd"
+version = "1.0.0"
+edition = "2021"
+authors = ["Cloakd Engineering"]
+description = "Ultra-high-performance, low-memory reverse proxy for LLM APIs with in-memory reversible pseudonymization"
+repository = "https://github.com/cloakd-gateway/core"
+license = "Apache-2.0 OR MIT"
+
+[dependencies]
+# Async Runtime & HTTP Server
+tokio = { version = "1", features = ["full"] }
+axum = { version = "0.8", features = ["macros"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors"] }
+
+# HTTP Client
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json"] }
+
+# Data & Streams
+bytes = "1"
+futures-util = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Pattern Matching & DLP
+regex = "1"
+
+# In-Memory Caching & Hashing (V2 FinOps)
+moka = { version = "0.12", features = ["future"] }
+sha2 = "0.10"
+
+# Error Handling & Configuration
+thiserror = "2"
+anyhow = "1"
+dotenvy = "0.15"
+
+# Observability (Zero-leak tracing)
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
