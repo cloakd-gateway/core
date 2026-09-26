@@ -174,3 +174,25 @@ To maintain ultra-low latency, strict security boundaries, and enterprise deploy
 
 3. **Independent Scalability & Operational Simplicity :**
    The Data Plane can be horizontally autoscaled at the edge or deployed as local Kubernetes sidecars without introducing database connection pool saturation on the SaaS Control Plane database.
+
+---
+
+## 8. Multi-Tenant Data Plane & Observability (v1.1.0)
+
+### A. The Pluggable `TenantResolver` (`src/tenant/resolver.rs`)
+At request ingress, Cloakd inspects the authentication bearer token (`sk-cloakd-...`) or headers (`x-cloakd-tenant-key`). The `TenantResolver` acts as a pluggable abstraction layer:
+* **`TenantCache` (`src/tenant/cache.rs`) :** Ultra-fast in-memory LRU cache powered by `moka`, resolving tenant metadata in under 50 microseconds.
+* **`EnvTenantResolver` :** Single-tenant zero-configuration fallback providing 100% backward compatibility with v1.0.0.
+* **`StaticTenantResolver` (`src/tenant/static_file.rs`) :** Loads air-gapped tenant configurations from `tenants.yaml` or `tenants.json`.
+
+### B. BYOK Credential Injection & Internal Token Stripping
+When a tenant defines custom `provider_keys`:
+1. `UpstreamClient` overrides server-level environment credentials with the tenant's specific upstream key for the resolved provider.
+2. Ingress tenant tokens (`sk-cloakd-...`) are mathematically stripped from forwarded headers, preventing Cloakd internal keys from leaking to external LLM providers.
+
+### C. Zero-Dependency Prometheus Metrics (`src/metrics/exporter.rs`)
+Cloakd avoids bulky metric runtime dependencies by employing atomic, thread-safe `AtomicU64` counters partitioned by read-heavy `RwLock` hash structures:
+* Scraped via standard `GET /metrics`.
+* Formatted strictly conforming to Prometheus Text Format 0.0.4.
+* Exposes total requests, cache hits/misses, DLP masked entity counts by type, and provider failover cascade frequencies.
+

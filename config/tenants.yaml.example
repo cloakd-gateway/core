@@ -1,0 +1,59 @@
+# Cloakd Core - Multi-Tenant Configuration Example
+# Set CLOAKD_TENANTS_FILE=config/tenants.yaml to enable static multi-tenant resolution.
+
+tenants:
+  # Tenant 1: Enterprise Banking Customer
+  - id: "tenant-bank-corp"
+    organization_name: "Bank Corp Global"
+    api_key: "sk-cloakd-bank-prod-9876543210"
+    # Specific DLP packs & rules enabled for this tenant
+    enabled_rules:
+      - "banking"     # Includes card, iban
+      - "fr"          # Includes fr_nir
+      - "secrets"     # Cloud & API credentials
+      - "email"
+    # Bring-Your-Own-Key (BYOK) for LLM providers
+    provider_keys:
+      openai: "sk-proj-bankcorp-private-openai-key"
+      gemini: "AIzaSyBankCorpDedicatedGeminiKey"
+    # Custom failover routing for this tenant
+    fallback_providers:
+      - "gemini"
+      - "openai"
+    # Enable FinOps prompt caching
+    cache_enabled: true
+    # Maximum requests per minute
+    rate_limit_rpm: 1200
+
+  # Tenant 2: FinTech Startup (US / Healthcare)
+  - id: "tenant-health-tech"
+    organization_name: "HealthTech AI"
+    api_key: "sk-cloakd-health-stage-123456789"
+    enabled_rules:
+      - "us"          # Includes us_ssn
+      - "pii"         # Includes email, phone
+      - "secrets"
+    provider_keys:
+      anthropic: "sk-ant-api03-healthtech-key"
+      openai: "sk-proj-healthtech-openai-key"
+    fallback_providers:
+      - "anthropic"
+      - "openai"
+    cache_enabled: true
+    rate_limit_rpm: 600
+
+  # Tenant 3: European Retailer with custom providers
+  - id: "tenant-euro-retail"
+    organization_name: "EuroRetail SAS"
+    api_key: "sk-cloakd-euro-live-5555444433"
+    enabled_rules:
+      - "eu"          # Includes iban, fr_nir, es_dni
+      - "email"
+      - "phone"
+    provider_keys:
+      custom: "bearer-token-local-vllm"
+    fallback_providers:
+      - "custom"
+      - "gemini"
+    cache_enabled: false
+    rate_limit_rpm: 300

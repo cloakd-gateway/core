@@ -1,6 +1,6 @@
 # Cloakd 🛡️
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](Cargo.toml)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](Cargo.toml)
 [![License](https://img.shields.io/badge/license-Apache%202.0%20%2F%20MIT-green.svg)](LICENSE)
 [![Memory Footprint](https://img.shields.io/badge/memory-%3C10%20MB%20RAM-brightgreen.svg)]()
 [![Binary Size](https://img.shields.io/badge/binary-5.2%20MB-purple.svg)]()
@@ -200,11 +200,55 @@ CLOAKD_ENABLED_RULES=email,card,iban,secrets,us_ssn
 
 ---
 
+## 🏢 Multi-Tenant Data Plane & BYOK (v1.1.0)
+
+Cloakd Core supports multi-tenant enterprise isolation directly in the data plane with sub-50 µs routing overhead:
+
+* 🔑 **Authentication & Context** : Clients authenticate with `Authorization: Bearer sk-cloakd-<tenant-key>` or `x-cloakd-tenant-key`.
+* 🛡️ **Per-Tenant DLP Rule Packs** : Tenant A can enforce strict `banking,eu` rules, while Tenant B uses `us,secrets`.
+* 💼 **BYOK (Bring-Your-Own-Key)** : Seamlessly inject each customer's private upstream API credentials (OpenAI, Anthropic, Gemini) with zero credential leakage to third parties.
+* ⚡ **Sub-50 µs In-Memory LRU Cache** : High-concurrency cached tenant configuration powered by `moka`.
+* 📁 **Air-Gapped Static Configuration** : Define tenants via local YAML/JSON file without requiring an external control plane (`CLOAKD_TENANTS_FILE=config/tenants.yaml`).
+
+```yaml
+# config/tenants.yaml
+tenants:
+  - id: "tenant-bank-corp"
+    organization_name: "Bank Corp Global"
+    api_key: "sk-cloakd-bank-prod-9876543210"
+    enabled_rules: ["banking", "fr", "secrets"]
+    provider_keys:
+      openai: "sk-proj-bankcorp-private-key"
+    fallback_providers: ["gemini", "openai"]
+    cache_enabled: true
+```
+
+Every response includes the audit header:
+```http
+x-cloakd-tenant-id: tenant-bank-corp
+```
+
+---
+
+## 📊 Prometheus Native Metrics (`/metrics`)
+
+Cloakd Core exposes zero-dependency, atomic thread-safe Prometheus metrics at `GET /metrics`:
+
+| Metric Name | Type | Description & Labels |
+| :--- | :--- | :--- |
+| `cloakd_http_requests_total` | Counter | Total HTTP requests handled (`tenant`, `status`, `cache="HIT\|MISS\|BYPASS"`) |
+| `cloakd_dlp_masked_entities_total` | Counter | Sensitive PII entities detected and pseudonymized (`tenant`, `entity`) |
+| `cloakd_cache_hits_total` | Counter | FinOps cache hits saving upstream LLM token costs (`tenant`) |
+| `cloakd_cache_misses_total` | Counter | Cache misses forwarded to upstream LLMs (`tenant`) |
+| `cloakd_upstream_failover_total` | Counter | Failover cascade triggers on 429/5xx errors (`from`, `to`) |
+
+---
+
 ## 🗺️ Product Roadmap
 
 > *This repository strictly covers the **Data Plane Gateway**. For the SaaS Control Plane web application, organization management, and billing, please refer to the [**Cloakd Platform Roadmap**](https://github.com/cloakd-gateway/platform#-saas-product-roadmap).*
 
-* **v1.0.0 — Production Core (Current Version) :**
+* **v1.0.0 — Production Core :**
   - [x] High-performance stateless Axum HTTP Gateway (`/v1/chat/completions`).
   - [x] In-memory reversible pseudonymization (`SessionVault`) with zero persistence.
   - [x] Sliding-window SSE stream transformer resolving fragmented token boundaries.
@@ -214,12 +258,20 @@ CLOAKD_ENABLED_RULES=email,card,iban,secrets,us_ssn
   - [x] Multi-provider fallback cascade on HTTP 429/5xx errors.
   - [x] Real-time audit headers (`x-cloakd-cache`, `x-cloakd-fallback`, `x-cloakd-masked-count`).
 
-* **v1.1.0 — High-Performance Multi-Tenant Data Plane (Upcoming) :**
-  - [ ] `TenantContext` resolution via API keys (`Bearer sk-cloakd-tenant...`).
-  - [ ] Dynamic organization DLP rules & custom fallback routing per tenant.
-  - [ ] Ultra-fast local LRU config cache (sub-50 µs) with asynchronous sync from the Control Plane.
-  - [ ] Prometheus & OpenTelemetry native metrics exporter (`/metrics`).
-  - [ ] Standalone air-gapped / Local YAML configuration loader for enterprise on-premise deployments.
+* **v1.1.0 — High-Performance Multi-Tenant Data Plane (Current Version) :**
+  - [x] `TenantContext` resolution via API keys (`Bearer sk-cloakd-tenant...` or `x-cloakd-tenant-key`).
+  - [x] Per-tenant DLP rule profiles & custom fallback routing.
+  - [x] Bring-Your-Own-Key (BYOK) upstream credential injection per tenant.
+  - [x] Sub-50 µs in-memory LRU `TenantCache` (powered by `moka`).
+  - [x] Air-gapped / Local YAML/JSON configuration loader (`CLOAKD_TENANTS_FILE`).
+  - [x] Native Prometheus metrics exporter (`GET /metrics`).
+  - [x] Multi-tenant audit trail with `x-cloakd-tenant-id` response header.
+
+* **v1.2.0 — Dynamic Control Plane Synchronization & Distributed Caching (Upcoming) :**
+  - [ ] Webhook-driven tenant cache invalidation and hot-reloading.
+  - [ ] Real-time Control Plane streaming sync (gRPC / WebSocket).
+  - [ ] Redis / Dragonfly optional distributed cache backend for clustered horizontal scaling.
+  - [ ] Semantic prompt caching using local SIMD embedding models.
 
 ---
 

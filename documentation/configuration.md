@@ -57,6 +57,13 @@ Cloakd automatically determines which upstream provider to route to based on the
 | `CLOAKD_FAILOVER_ENABLED` | Boolean | `true` | Enables automatic failover to fallback providers upon HTTP 429 or 5xx errors. |
 | `CLOAKD_FALLBACK_PROVIDERS` | String | `gemini,openai,anthropic` | Comma-separated preferred order of fallback providers. |
 
+### Multi-Tenancy & Access Control (v1.1.0)
+
+| Variable | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `CLOAKD_TENANTS_FILE` | String | *None* | Path to a local YAML or JSON file defining static tenants (`config/tenants.yaml`). |
+| `CLOAKD_ALLOW_ANONYMOUS` | Boolean | `true` | When `true`, requests without a valid tenant key use the default configuration. When `false`, unauthenticated requests return `401 Unauthorized`. |
+
 ---
 
 ## 2. Production Configuration Profiles
@@ -108,3 +115,20 @@ CLOAKD_ENABLED_RULES=all
 CLOAKD_CACHE_ENABLED=true
 CLOAKD_FAILOVER_ENABLED=false
 ```
+
+### Profile D: Multi-Tenant Air-Gapped Enterprise Gateway (v1.1.0)
+Strict tenant authentication, per-organization BYOK keys and DLP rules, rejecting anonymous requests:
+```env
+CLOAKD_HOST=0.0.0.0
+CLOAKD_PORT=8080
+CLOAKD_LOG_LEVEL=info
+
+# Multi-tenant config file
+CLOAKD_TENANTS_FILE=config/tenants.yaml
+CLOAKD_ALLOW_ANONYMOUS=false
+
+# Cache and Prometheus metrics
+CLOAKD_CACHE_ENABLED=true
+CLOAKD_FAILOVER_ENABLED=true
+```
+
