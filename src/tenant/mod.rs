@@ -1,5 +1,6 @@
 pub mod cache;
 pub mod context;
+pub mod manifest;
 pub mod resolver;
 pub mod static_file;
 

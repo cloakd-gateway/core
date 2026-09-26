@@ -1,6 +1,6 @@
 use super::cache::TenantCache;
 use super::context::{TenantConfig, TenantContext};
-use super::static_file::load_tenants_from_file;
+use super::static_file::load_tenants_from_path;
 use crate::config::AppConfig;
 use crate::error::CloakdError;
 use std::collections::HashMap;
@@ -63,13 +63,13 @@ impl TenantResolver {
         )
     }
 
-    /// Loads a TenantResolver from a local YAML or JSON file.
+    /// Loads a TenantResolver from a local YAML/JSON file or directory.
     pub fn from_file<P: AsRef<Path>>(
         config: &AppConfig,
         path: P,
         allow_anonymous: bool,
     ) -> Result<Self, CloakdError> {
-        let map = load_tenants_from_file(path)?;
+        let map = load_tenants_from_path(config, path)?;
         Ok(Self::from_static_map(config, map, allow_anonymous))
     }
 
@@ -183,6 +183,12 @@ mod tests {
         let tenant_alpha = TenantConfig {
             id: TenantId::from("tenant-alpha"),
             organization_name: "Alpha Corp".to_string(),
+            user_id: None,
+            user_name: None,
+            role: None,
+            default_model: None,
+            allowed_models: None,
+            fallback_models: None,
             enabled_rules: tenant_rules,
             provider_keys: HashMap::new(),
             fallback_providers: None,

@@ -62,6 +62,12 @@ mod tests {
         let config = TenantConfig {
             id: TenantId::from("tenant-alpha"),
             organization_name: "Alpha Corp".to_string(),
+            user_id: None,
+            user_name: None,
+            role: None,
+            default_model: None,
+            allowed_models: None,
+            fallback_models: None,
             enabled_rules: HashSet::new(),
             provider_keys: HashMap::new(),
             fallback_providers: None,
