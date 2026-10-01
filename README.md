@@ -22,7 +22,7 @@ Existing solutions have critical flaws:
 ### The Cloakd Breakthrough
 * 🔒 **Reversible Local Pseudonymization (*Vaulted Tokenization*)** : Sensitive data is replaced by contextual typed tokens on ingress (`{{__VAR_EMAIL_1__}}`, `{{__VAR_IBAN_1__}}`) and seamlessly restored on egress—**even across fragmented network chunks in real-time SSE streaming**.
 * ⚡ **Ultra-Low Resource Footprint** : Consumes **~6.5 MB of RAM** under production load and adds **sub-millisecond (< 1 ms) overhead**. Single 5.2 MB static Rust binary with pure Rustls (zero external C dependencies).
-* 💰 **FinOps Prompt Caching** : Identical prompt structures across different users trigger instant cache hits (**< 10 ms latency, $0 token cost**) while guaranteeing **total privacy isolation** (each user only sees their own sensitive data).
+* 💰 **FinOps Prompt Caching** : Identical prompt structures across different users **of the same tenant** trigger instant cache hits (**< 10 ms latency, $0 token cost**) while guaranteeing **total privacy isolation** (each user only sees their own sensitive data; cache entries are never shared between tenants).
 * 🛡️ **Zero-Persistence Guarantee** : The session vault is strictly in-memory and dropped immediately upon request termination. Zero disk writes, zero PII logging.
 * 🔄 **Transparent Multi-Provider Failover** : Automatic fallback on `HTTP 429` (Rate limits) or `5xx` server outages (e.g. Gemini $\rightarrow$ OpenAI $\rightarrow$ Anthropic $\rightarrow$ Local Ollama/vLLM).
 * 🔌 **100% Drop-In OpenAI Compatibility** : Works instantly with official OpenAI Python/Node SDKs, LangChain, LlamaIndex, Cursor, and any OpenAI-compatible client.

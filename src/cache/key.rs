@@ -1,10 +1,35 @@
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
-/// Computes a deterministic SHA-256 cache key for an OpenAI-compatible completion payload.
+/// Computes a tenant-scoped, deterministic SHA-256 cache key.
+///
+/// The cache is shared between users of the SAME tenant (FinOps savings), but never between
+/// tenants: the tenant identifier and the resolved upstream provider are mixed into the key.
+/// This prevents one tenant from reading or poisoning another tenant's cached responses.
+///
+/// The payload MUST already be pseudonymized by Ingress DLP.
+pub fn compute_scoped_cache_key(tenant_id: &str, provider_id: &str, payload: &Value) -> String {
+    let mut hasher = Sha256::new();
+    // Length-prefixed fields so that ("a", "bc") and ("ab", "c") can never collide.
+    hasher.update(b"tenant:");
+    hasher.update(tenant_id.len().to_string().as_bytes());
+    hasher.update(b":");
+    hasher.update(tenant_id.as_bytes());
+    hasher.update(b"\nprovider:");
+    hasher.update(provider_id.len().to_string().as_bytes());
+    hasher.update(b":");
+    hasher.update(provider_id.as_bytes());
+    hasher.update(b"\npayload:");
+    hasher.update(compute_cache_key(payload).as_bytes());
+    format!("{:x}", hasher.finalize())
+}
+
+/// Computes a deterministic SHA-256 hash of an OpenAI-compatible completion payload.
+///
+/// This is the payload-only part of the cache key. Callers should use
+/// [`compute_scoped_cache_key`] so that entries are isolated per tenant.
 ///
 /// The payload passed to this function MUST already be pseudonymized by Ingress DLP.
-/// This enables cache hits across different users while preserving total privacy isolation.
 pub fn compute_cache_key(payload: &Value) -> String {
     let mut hasher = Sha256::new();
 
@@ -119,5 +144,36 @@ mod tests {
         });
 
         assert_ne!(compute_cache_key(&p1), compute_cache_key(&p2));
+    }
+
+    #[test]
+    fn test_scoped_key_isolates_tenants() {
+        let p = json!({
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": "Hello {{__VAR_EMAIL_1__}}"}]
+        });
+
+        let a = compute_scoped_cache_key("tenant-a", "openai", &p);
+        let b = compute_scoped_cache_key("tenant-b", "openai", &p);
+        assert_ne!(a, b, "same prompt must not share cache across tenants");
+        assert_eq!(a, compute_scoped_cache_key("tenant-a", "openai", &p));
+    }
+
+    #[test]
+    fn test_scoped_key_isolates_providers() {
+        let p = json!({"model": "m", "messages": [{"role": "user", "content": "x"}]});
+        assert_ne!(
+            compute_scoped_cache_key("t", "openai", &p),
+            compute_scoped_cache_key("t", "custom", &p)
+        );
+    }
+
+    #[test]
+    fn test_scoped_key_has_no_boundary_collision() {
+        let p = json!({"model": "m", "messages": [{"role": "user", "content": "x"}]});
+        assert_ne!(
+            compute_scoped_cache_key("a", "bc", &p),
+            compute_scoped_cache_key("ab", "c", &p)
+        );
     }
 }
