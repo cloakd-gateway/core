@@ -1,6 +1,6 @@
 use crate::api::models::HealthResponse;
 use crate::api::routes::AppState;
-use crate::cache::compute_cache_key;
+use crate::cache::compute_scoped_cache_key;
 use crate::error::CloakdError;
 use crate::stream::SseStreamTransformer;
 use crate::vault::SessionVault;
@@ -144,7 +144,11 @@ pub async fn chat_completions(
 
     // 3. FinOps Cache Lookup (Non-streaming mode, if cache enabled for tenant)
     let cache_key = if state.prompt_cache.is_enabled() && tenant.cache_enabled {
-        Some(compute_cache_key(&payload))
+        Some(compute_scoped_cache_key(
+            tenant.id.as_str(),
+            &resolved_target.provider_id.to_string(),
+            &payload,
+        ))
     } else {
         None
     };
@@ -342,7 +346,7 @@ mod tests {
             ]
         });
         engine.mask_chat_payload(&mut payload_a, &mut vault_a);
-        let key_a = compute_cache_key(&payload_a);
+        let key_a = compute_scoped_cache_key("tenant-1", "gemini", &payload_a);
 
         // User B request (different sensitive email, same intent)
         let mut vault_b = SessionVault::new();
@@ -353,9 +357,12 @@ mod tests {
             ]
         });
         engine.mask_chat_payload(&mut payload_b, &mut vault_b);
-        let key_b = compute_cache_key(&payload_b);
+        let key_b = compute_scoped_cache_key("tenant-1", "gemini", &payload_b);
+        let key_other_tenant = compute_scoped_cache_key("tenant-2", "gemini", &payload_b);
 
-        // 1. Both produce the identical anonymized cache key!
+        // 1. Same tenant: both produce the identical anonymized cache key (FinOps sharing).
+        //    Different tenant: never the same key (no cross-tenant leak or poisoning).
+        assert_ne!(key_a, key_other_tenant);
         assert_eq!(key_a, key_b);
 
         // 2. Simulated cached completion stored for key_a
